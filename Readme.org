@@ -1,0 +1,15 @@
+* semantic-namespace/compound-identity
+
+** rationale
+
+why not a collection of identities to mean/fetch a place/value? 
+
+** clojars info
+https://clojars.org/com.github.semantic-namespace/compound-identity
+
+** usage
+https://github.com/semantic-namespace/identity/blob/main/test/semantic_namespace/compound/identity_test.clj
+
+** License
+
+https://opensource.org/licenses/MIT
