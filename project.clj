@@ -1,4 +1,4 @@
-(defproject com.github.semantic-namespace/compound-identity "0.1.0-SNAPSHOT"
+(defproject com.github.semantic-namespace/compound-identity "0.1.1-SNAPSHOT"
   :description "semantic compound identity: identity as combination of semantic identities"
   :url "https://github.com/semantic-spec/compound-identity"
   :license {:name "MIT"
