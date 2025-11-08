@@ -1,56 +1,98 @@
 (ns semantic-namespace.compound.identity
+  "Semantic kernel providing compound-identity algebra.
+   Each identity is a set of qualified keywords representing composed meaning.
+   All operations are deterministic, data-oriented, and side-effect free,
+   except for explicit registry mutation helpers."
   (:require [clojure.set :as set]
             [clojure.string :as str]))
 
-(defonce registry (atom {}))
+;; =============================================================================
+;; Registry
+;; =============================================================================
 
-(defn query [find*]
-  (let [find* (set find*)]
-    (->> (keys @registry)
-         (filter (fn [x] (set/superset? x find*)))
-         (mapv (fn [x] (vec (sort (vec x))))))))
+(def ^:dynamic env-id #{})
 
-(defn remove* [composed-identity]
-  (swap! registry dissoc composed-identity))
-
-(defn valid? [composed-identity]
-  (and (set? composed-identity) (>= (count composed-identity) 2) (every? qualified-keyword? composed-identity)))
-
-(defn exists? [compound-identity value]
-  (let [internal-value (get @registry compound-identity)]
-    [(boolean internal-value) (= internal-value value)]
-    ))
-
-(defn fetch [identity]
-  (get @registry identity))
-
+(def registry
+  (atom {}))
 
 ;; =============================================================================
-;; Discovery & Navigation
+;; Validation & Registry
+;; =============================================================================
+
+(defn valid?
+  "Returns true if `id` is a valid compound identity.
+   A valid identity is a set of at least 2 qualified keywords."
+  ([id]
+   (valid? id false))
+  ([id verbose?]
+   (cond
+     (not (set? id)) (if verbose? [:error "not-a-set"] false)
+     (< (count id) 2) (if verbose? [:error "too-few-elements"] false)
+     (not-every? qualified-keyword? id) (if verbose? [:error "unqualified-keywords"] false)
+     :else true)))
+
+(defn fetch
+  "Fetch the value associated with a compound identity."
+  [identity]
+  (get @registry identity))
+
+(defn exists?
+  "Check if a compound identity exists in the registry and whether its value matches `value`.
+   Returns {:exists bool :matches bool}."
+  [compound-identity value]
+  (let [found (get @registry compound-identity)]
+    {:exists (contains? @registry compound-identity)
+     :matches (= found value)}))
+
+(defn remove*
+  "Remove a compound identity from the registry."
+  [compound-identity]
+  (swap! registry dissoc compound-identity))
+
+(defn register!
+  "Register a new compound identity and its associated value.
+   Asserts validity before inserting."
+  [id value]
+  (assert (valid? id))
+  (swap! registry assoc id value)
+  id)
+
+;; =============================================================================
+;; Querying & Discovery
 ;; =============================================================================
 
 (defn all-identities
-  "Returns all compound identities in the registry."
+  "Return a vector of all compound identities in the registry."
   []
   (vec (keys @registry)))
 
+(defn query
+  "Return all compound identities that are supersets of `find*`."
+  [find*]
+  (let [find* (set find*)]
+    (->> (keys @registry)
+         (filter #(set/superset? % find*))
+         (map #(vec (sort %)))
+         (sort)
+         (vec))))
+
 (defn find-with
-    "Find all identities containing the given aspect(s).
-   aspect can be a keyword or set of keywords."
+  "Find all identities containing the given aspect(s).
+   Returns a plain map preserving deterministic order by identity size."
   [aspect]
   (let [aspect-set (if (set? aspect) aspect #{aspect})]
     (->> @registry
          (filter (fn [[k _]] (set/superset? k aspect-set)))
-         (into {}))))
+         (sort-by (comp count key))
+         (into (array-map)))))
 
 (defn find-exact
-  "Find identities that exactly match the given set."
+  "Find the exact identity and its value if registered."
   [identity-set]
   (get @registry identity-set))
 
 (defn related-to
-    "Find all identities that share at least one aspect with the given aspect.
-   Returns a frequency map of co-occurring aspects."
+  "Return a frequency map of co-occurring aspects related to a given aspect."
   [aspect]
   (->> (all-identities)
        (filter #(contains? % aspect))
@@ -61,26 +103,75 @@
        (into {})))
 
 (defn semantic-neighbors
-  "Find identities that are semantically related (share aspects)."
+  "Return a list of related identities with similarity metrics.
+   Each result has {:identity :shared :similarity}."
   [identity-set]
-  (let [aspects (vec identity-set)]
-    (->> (all-identities)
-         (map (fn [other]
-                {:identity other
-                 :shared (set/intersection identity-set other)
-                 :similarity (/ (count (set/intersection identity-set other))
-                                (count (set/union identity-set other)))}))
-         (filter #(and (pos? (:similarity %))
-                       (not= identity-set (:identity %))))
-         (sort-by :similarity >))))
-
+  (->> (all-identities)
+       (keep (fn [other]
+               (let [shared (set/intersection identity-set other)
+                     union  (set/union identity-set other)
+                     sim    (if (seq union)
+                              (/ (count shared) (count union))
+                              0)]
+                 (when (and (pos? sim)
+                            (not= identity-set other))
+                   {:identity other
+                    :shared shared
+                    :similarity sim}))))
+       (sort-by :similarity >)))
 
 ;; =============================================================================
-;; Identity Analytics
+;; Algebraic Operations
 ;; =============================================================================
+
+(defn query-algebra
+  "Perform set-algebraic queries over compound identities.
+   Supported ops:
+     {:intersection [sets]}
+     {:union [sets]}
+     {:difference [include exclude]}"
+  [ops]
+  (let [all-ids (set (all-identities))
+        results
+        (cond
+          (:intersection ops)
+          (filter #(every? (fn [x] (set/superset? % x)) (:intersection ops)) all-ids)
+
+          (:union ops)
+          (filter #(some (fn [x] (set/superset? % x)) (:union ops)) all-ids)
+
+          (:difference ops)
+          (let [[include exclude] (:difference ops)]
+            (filter #(and (set/superset? % include)
+                          (empty? (set/intersection % exclude)))
+                    all-ids))
+
+          :else
+          (throw (ex-info "Unknown operation" {:ops ops})))]
+    (->> results (map #(vec (sort %))) sort vec)))
+
+(defn where
+  "Return a map of all registry entries satisfying predicate (pred id value)."
+  [pred]
+  (->> @registry
+       (filter (fn [[k v]] (pred k v)))
+       (into {})))
+
+;; =============================================================================
+;; Analytical Utilities
+;; =============================================================================
+
+(defn aspect-frequency
+  "Return frequency map of aspects across all identities, sorted descending."
+  []
+  (->> (all-identities)
+       (mapcat identity)
+       (frequencies)
+       (sort-by val >)
+       (into {})))
 
 (defn identity-stats
-  "Returns statistics about identity usage in the system."
+  "Return list of {:identity :size :value} sorted by descending size."
   []
   (->> (all-identities)
        (map (fn [id]
@@ -89,82 +180,39 @@
                :value (get @registry id)}))
        (sort-by :size >)))
 
-(defn aspect-frequency
-  "Returns frequency of individual aspects across all identities."
-  []
-  (->> (all-identities)
-       (mapcat identity)
-       (frequencies)
-       (sort-by val >)
-       (into {})))
-
-(defn singletons
-  "Find identities that are used only once (potential orphans)."
-  []
-  (let [freq (aspect-frequency)]
-    (->> (all-identities)
-         (filter (fn [id-set]
-                   (some #(= 1 (get freq %)) id-set))))))
-
-(defn most-connected
-  "Find aspects that appear in the most compound identities."
-  [n]
-  (take n (aspect-frequency)))
-
 (defn clusters
-  "Group identities by their primary namespace."
+  "Group identities by primary namespace, returning a map {:ns [identities]}."
   []
   (reduce (fn [acc id-set]
-            (reduce (fn [inner-acc aspect]
+            (reduce (fn [inner aspect]
                       (let [ns-part (namespace aspect)]
-                        (update inner-acc (keyword ns-part)
+                        (update inner (keyword ns-part)
                                 (fnil conj #{}) id-set)))
-                    acc
-                    id-set))
+                    acc id-set))
           {}
           (all-identities)))
 
+(defn correlation-matrix
+  "Return normalized correlation matrix of aspect co-occurrence (as 0–1 floats)."
+  []
+  (let [aspects (keys (aspect-frequency))
+        all-ids (all-identities)
+        total (max 1 (count all-ids))]
+    (into {}
+          (for [a1 aspects]
+            [a1 (into {}
+                      (for [a2 aspects]
+                        [a2 (/ (count (filter #(and (contains? % a1)
+                                                    (contains? % a2))
+                                              all-ids))
+                               total)]))]))))
 
 ;; =============================================================================
-;; Advanced Querying
+;; Heuristics & Diagnostics
 ;; =============================================================================
-
-(defn query-algebra
-    "Query identities using set algebra operations.
-   ops: {:intersection [...], :union [...], :difference [...]}"
-  [ops]
-  (let [all-ids (set (all-identities))]
-    (cond
-      (:intersection ops)
-      (filter (fn [id]
-                (every? #(set/superset? id %) (:intersection ops)))
-              all-ids)
-
-      (:union ops)
-      (filter (fn [id]
-                (some #(set/superset? id %) (:union ops)))
-              all-ids)
-
-      (:difference ops)
-      (let [[include exclude] (:difference ops)]
-        (filter (fn [id]
-                  (and (set/superset? id include)
-                       (empty? (set/intersection id exclude))))
-                all-ids))
-
-      :else
-      (throw (ex-info "Unknown operation" {:ops ops})))))
-
-(defn where
-  "Query identities with a predicate function."
-  [pred]
-  (->> @registry
-       (filter (fn [[k v]] (pred k v)))
-       (into {})))
 
 (defn missing-aspects
-    "Find identities that might be missing common aspects.
-   Returns suggestions based on correlation."
+  "Suggest aspects potentially missing from an identity based on correlation."
   [identity-set]
   (let [similar (semantic-neighbors identity-set)
         all-aspects (->> similar
@@ -174,94 +222,30 @@
     (->> all-aspects
          (remove (fn [[aspect _]] (contains? identity-set aspect)))
          (take 5)
-         (map (fn [[aspect freq]]
+         (mapv (fn [[aspect freq]]
                 {:aspect aspect
                  :correlation (/ freq (count similar))})))))
 
-
-;; =============================================================================
-;; Dependency Analysis
-;; =============================================================================
-
-(defn dependency-graph
-  "Build a dependency graph based on shared aspects."
-  []
-  (let [all-ids (all-identities)]
-    (reduce (fn [graph id]
-              (assoc graph id
-                     {:depends-on (semantic-neighbors id)
-                      :depended-by (filter #(and (not= id %)
-                                                 (not-empty (set/intersection id %)))
-                                           all-ids)}))
-            {}
-            all-ids)))
-
-(defn transitive-deps
-  "Find all transitive dependencies for an identity."
-  [identity-set]
-  (loop [to-visit [identity-set]
-         visited #{}
-         deps #{}]
-    (if (empty? to-visit)
-      deps
-      (let [current (first to-visit)
-            neighbors (->> (semantic-neighbors current)
-                           (map :identity)
-                           (remove visited))]
-        (recur (concat (rest to-visit) neighbors)
-               (conj visited current)
-               (into deps neighbors))))))
-
-
-
-;; =============================================================================
-;; Refactoring Support
-;; =============================================================================
-
-(defn suggest-identity
-  "Suggest additional aspects for an identity based on patterns."
-  [identity-set]
-  (let [missing (missing-aspects identity-set)]
-    {:current identity-set
-     :suggestions (map :aspect missing)
-     :rationale missing}))
-
 (defn find-anomalies
-  "Find unusual or potentially problematic identity combinations."
+  "Return list of identities that violate expected semantic constraints."
   []
   (let [all-ids (all-identities)]
     (->> all-ids
          (filter (fn [id]
-                   (or
-                    ;; Contradictory aspects
-                    (and (contains? id :sync/operation)
-                         (contains? id :async/operation))
-                    ;; Missing common pairs
-                    (and (contains? id :api/endpoint)
-                         (not (contains? id :auth/required)))))))))
+                   (or (and (contains? id :sync/operation)
+                            (contains? id :async/operation))
+                       (and (contains? id :api/endpoint)
+                            (not (contains? id :auth/required)))))))))
 
-(defn rename-aspect
-  "Helper to show impact of renaming an aspect."
-  [old-aspect new-aspect]
-  (let [affected (find-with old-aspect)]
-    {:affected-count (count affected)
-     :affected-identities (keys affected)
-     :proposed-changes (map (fn [id]
-                              {:old id
-                               :new (-> id
-                                        (disj old-aspect)
-                                        (conj new-aspect))})
-                            (keys affected))}))
 
 ;; =============================================================================
-;; Visualization Support
+;; Visualization
 ;; =============================================================================
 
 (defn to-graphviz
-  "Generate Graphviz DOT format for visualization."
+  "Return a Graphviz DOT string representing compound-identity relationships."
   []
-  (let [all-ids (all-identities)
-        edges (for [id all-ids
+  (let [edges (for [id (all-identities)
                     aspect id]
                 [aspect id])]
     (str "digraph CompoundIdentity {\n"
@@ -275,7 +259,7 @@
          "\n}")))
 
 (defn to-mermaid
-  "Generate Mermaid diagram format."
+  "Return a Mermaid diagram (graph TD) for namespace-based clusters."
   []
   (let [clusters (clusters)]
     (str "graph TD\n"
@@ -286,103 +270,23 @@
                                     (for [id ids]
                                       (format "    %s[\"%s\"]"
                                               (hash id)
-                                              (str/join ", " (map name id)))))
+                                              (str/join ", "  (map name id)))))
                           "\n  end"))))))
 
-(defn correlation-matrix
-  "Build a correlation matrix of aspect co-occurrence."
-  []
-  (let [aspects (keys (aspect-frequency))
-        all-ids (all-identities)]
-    (into {}
-          (for [a1 aspects]
-            [a1 (into {}
-                      (for [a2 aspects]
-                        [a2 (count (filter #(and (contains? % a1)
-                                                 (contains? % a2))
-                                           all-ids))]))]))))
-
-
 ;; =============================================================================
-;; REPL Development Support
-;; =============================================================================
-
-(defn def-temp
-  "Define a temporary identity for experimentation."
-  [identity-set value]
-  (swap! registry assoc
-         (conj identity-set :temp/experimental)
-         value)
-  identity-set)
-
-(defn clear-temp
-  "Remove all temporary identities."
-  []
-  (let [temps (find-with :temp/experimental)]
-    (doseq [id (keys temps)]
-      (remove* id))
-    (count temps)))
-
-(defn promote-temp
-  "Promote a temporary identity to permanent."
-  [temp-identity]
-  (when-let [value (get @registry temp-identity)]
-    (let [permanent-id (disj temp-identity :temp/experimental)]
-      (swap! registry assoc permanent-id value)
-      (remove* temp-identity)
-      permanent-id)))
-
-
-;; =============================================================================
-;; Documentation Generation
-;; =============================================================================
-
-(defn describe
-  "Generate a description of an identity."
-  [identity-set]
-  (let [value (find-exact identity-set)
-        neighbors (semantic-neighbors identity-set)
-        missing (missing-aspects identity-set)]
-    {:identity identity-set
-     :aspects (sort (vec identity-set))
-     :value value
-     :semantic-neighbors (take 3 neighbors)
-     :suggested-aspects (take 3 (map :aspect missing))
-     :usage-count (count (find-with identity-set))}))
-
-(defn generate-docs
-  "Generate documentation for all identities."
-  []
-  (let [all-ids (all-identities)
-        by-namespace (clusters)]
-    {:total-identities (count all-ids)
-     :namespaces (keys by-namespace)
-     :aspect-frequency (take 10 (aspect-frequency))
-     :clusters by-namespace
-     :anomalies (find-anomalies)}))
-
-;; =============================================================================
-;; Summary Report
+;; Summary
 ;; =============================================================================
 
 (defn summary
-  "Generate a comprehensive summary of the identity system."
+  "Return data summary of the current identity registry:
+   {:total :unique-aspects :namespaces :top-aspects :largest :anomalies}"
   []
-  (let [all-ids (all-identities)
+  (let [ids (all-identities)
         aspects (aspect-frequency)
-        clustered (clusters)]
-    (println "=== Compound Identity System Summary ===")
-    (println (format "Total Identities: %d" (count all-ids)))
-    (println (format "Unique Aspects: %d" (count aspects)))
-    (println (format "Namespaces: %s" (str/join ", " (keys clustered))))
-    (println "\nTop Aspects:")
-    (doseq [[aspect count] (take 5 aspects)]
-      (println (format "  %s: %d" aspect count)))
-    (println "\nLargest Identities:")
-    (doseq [id (take 3 (sort-by count > all-ids))]
-      (println (format "  %s (%d aspects)"
-                       (str/join ", " (map name id))
-                       (count id))))
-    (println "\nPotential Issues:")
-    (doseq [anomaly (find-anomalies)]
-      (println (format "  - %s" (pr-str anomaly))))))
+        clusters (clusters)]
+    {:total (count ids)
+     :unique-aspects (count aspects)
+     :namespaces (keys clusters)
+     :top-aspects (take 5 aspects)
+     :largest (take 3 (sort-by count > ids))
+     :anomalies (find-anomalies)}))
