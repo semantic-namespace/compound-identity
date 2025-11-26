@@ -51,11 +51,19 @@
 
 (defn register!
   "Register a new compound identity and its associated value.
-   Asserts validity before inserting."
-  [id value]
-  (assert (valid? id))
-  (swap! registry assoc id value)
-  id)
+   Asserts validity before inserting.
+
+   Two arities:
+   - [id value]: Register without dev-id
+   - [dev-id id value]: Augment value with :dev/id"
+  ([id value]
+   (assert (valid? id))
+   (swap! registry assoc id value)
+   id)
+  ([dev-id id value]
+   (assert (valid? id))
+   (swap! registry assoc id (assoc value :dev/id dev-id))
+   id))
 
 ;; =============================================================================
 ;; Querying & Discovery
@@ -109,10 +117,10 @@
   (->> (all-identities)
        (keep (fn [other]
                (let [shared (set/intersection identity-set other)
-                     union  (set/union identity-set other)
-                     sim    (if (seq union)
-                              (/ (count shared) (count union))
-                              0)]
+                     union (set/union identity-set other)
+                     sim (if (seq union)
+                           (/ (count shared) (count union))
+                           0)]
                  (when (and (pos? sim)
                             (not= identity-set other))
                    {:identity other
@@ -223,8 +231,8 @@
          (remove (fn [[aspect _]] (contains? identity-set aspect)))
          (take 5)
          (mapv (fn [[aspect freq]]
-                {:aspect aspect
-                 :correlation (/ freq (count similar))})))))
+                 {:aspect aspect
+                  :correlation (/ freq (count similar))})))))
 
 (defn find-anomalies
   "Return list of identities that violate expected semantic constraints."
@@ -236,7 +244,6 @@
                             (contains? id :async/operation))
                        (and (contains? id :api/endpoint)
                             (not (contains? id :auth/required)))))))))
-
 
 ;; =============================================================================
 ;; Visualization
@@ -270,7 +277,7 @@
                                     (for [id ids]
                                       (format "    %s[\"%s\"]"
                                               (hash id)
-                                              (str/join ", "  (map name id)))))
+                                              (str/join ", " (map name id)))))
                           "\n  end"))))))
 
 ;; =============================================================================

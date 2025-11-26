@@ -1,0 +1,212 @@
+{:meta
+ {:version "0.1.0",
+  :system "calendar-availability",
+  :generated-at "2025-11-26T17:52:25.681751800Z"},
+ :entities
+ {:component.foundation.google/gcal-http
+  {:identity
+   [:domain/calendar
+    :domain/google
+    :effect/read
+    :integration/external
+    :observability/traced
+    :protocol/http
+    :semantic-namespace/component
+    :semantic/docs
+    :temporal/async
+    :temporal/timeout-configured
+    :tier/foundation],
+   :context nil,
+   :response nil,
+   :deps #{},
+   :impl :not-implemented,
+   :docs "Google Calendar HTTP client for event retrieval."},
+  :component.foundation.google/oauth
+  {:identity
+   [:domain/google
+    :effect/read
+    :integration/external
+    :observability/traced
+    :protocol/http
+    :protocol/oauth
+    :semantic-namespace/component
+    :semantic/docs
+    :temporal/async
+    :temporal/timeout-configured
+    :tier/foundation],
+   :context nil,
+   :response nil,
+   :deps #{},
+   :impl :not-implemented,
+   :docs "Google OAuth2 component for API authorization."},
+  :component.foundation.users/db
+  {:identity
+   [:domain/users
+    :effect/read
+    :integration/internal
+    :observability/metered
+    :semantic-namespace/component
+    :semantic/docs
+    :tier/foundation],
+   :context nil,
+   :response nil,
+   :deps #{},
+   :impl :not-implemented,
+   :docs "Database component for user persistence."},
+  :endpoint.api.scheduling/query-availability
+  {:identity
+   [:authorization/required
+    :capacity/rate-limited
+    :compliance/audited
+    :compliance/pii
+    :domain/scheduling
+    :effect/read
+    :observability/logged
+    :observability/metered
+    :operation/search
+    :protocol/http
+    :semantic-namespace/endpoint
+    :semantic-namespace/function
+    :semantic/docs
+    :tier/api],
+   :context [:query/date :query/language],
+   :response [:availability/users],
+   :deps
+   #{:service.scheduling/check-user-day
+     :service.users/find-by-language
+     :service.scheduling/collect-free-users},
+   :impl :not-implemented,
+   :docs "HTTP endpoint for querying user availability."},
+  :handler.error.auth/unauthorized
+  {:identity
+   [:authorization/unauthorized
+    :domain/api
+    :semantic-namespace/error-handler
+    :semantic/docs],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl :not-implemented,
+   :docs "Handle unauthorized API requests."},
+  :handler.error.capacity/rate-limited
+  {:identity
+   [:capacity/rate-limited
+    :domain/api
+    :semantic-namespace/error-handler
+    :semantic/docs],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl :not-implemented,
+   :docs "Handle rate limit exceeded errors."},
+  :handler.error.http/google
+  {:identity
+   [:domain/google
+    :protocol/http
+    :semantic-namespace/error-handler
+    :semantic/docs],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl :not-implemented,
+   :docs "Handle Google API HTTP failures."},
+  :handler.error.timeout/scheduling
+  {:identity
+   [:domain/scheduling
+    :semantic-namespace/error-handler
+    :semantic/docs
+    :temporal/timeout],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl :not-implemented,
+   :docs "Handle scheduling timeout errors."},
+  :schema.data/users
+  {:identity
+   [:domain/users :semantic-namespace/data-schema :semantic/docs],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl nil,
+   :docs
+   "User data schema with identity, contact, language, and Google Calendar token."},
+  :schema.data.google/calendar-event
+  {:identity
+   [:domain/google
+    :google/calendar-event
+    :semantic-namespace/data-schema
+    :semantic/docs],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl nil,
+   :docs "Google Calendar event with start/end timestamps."},
+  :schema.data.scheduling/availability
+  {:identity
+   [:domain/scheduling
+    :scheduling/availability
+    :semantic-namespace/data-schema
+    :semantic/docs],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl nil,
+   :docs "Availability result: list of available users."},
+  :schema.data.scheduling/query
+  {:identity
+   [:domain/scheduling
+    :scheduling/query
+    :semantic-namespace/data-schema
+    :semantic/docs],
+   :context nil,
+   :response nil,
+   :deps nil,
+   :impl nil,
+   :docs "Scheduling query input: target date and language filter."},
+  :service.scheduling/check-user-day
+  {:identity
+   [:compliance/audited
+    :compliance/pii
+    :domain/scheduling
+    :effect/read
+    :integration/external
+    :observability/traced
+    :operation/validate
+    :semantic-namespace/function
+    :semantic/docs
+    :temporal/async
+    :temporal/timeout-configured
+    :tier/service],
+   :context [:query/date :user/gcal-refresh-token],
+   :response [:scheduling/available?],
+   :deps #{:component.foundation.google/gcal-http},
+   :impl :not-implemented,
+   :docs "Check user availability for a date via Google Calendar."},
+  :service.scheduling/collect-free-users
+  {:identity
+   [:domain/scheduling
+    :effect/pure
+    :observability/metered
+    :operation/process
+    :semantic-namespace/function
+    :semantic/docs
+    :tier/service],
+   :context [:query/date :query/language :user/email],
+   :response [:availability/users],
+   :deps #{},
+   :impl :not-implemented,
+   :docs "Aggregate available users into final result."},
+  :service.users/find-by-language
+  {:identity
+   [:domain/users
+    :effect/read
+    :observability/metered
+    :operation/search
+    :semantic-namespace/function
+    :semantic/docs
+    :tier/service],
+   :context [:query/language],
+   :response [:user/email :user/gcal-refresh-token],
+   :deps #{:component.foundation.users/db},
+   :impl :not-implemented,
+   :docs "Search users by language preference."}}}

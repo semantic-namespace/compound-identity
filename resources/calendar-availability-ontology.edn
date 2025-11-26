@@ -1,0 +1,84 @@
+{:meta
+ {:version "0.1.0",
+  :system "calendar-availability",
+  :description "Semantic ontology for calendar availability system"},
+ :entity-types
+ #:semantic-namespace{:component
+                      {:description
+                       "Infrastructure component with lifecycle",
+                       :required-props [:deps :impl],
+                       :tiers [:tier/foundation :tier/service]},
+                      :function
+                      {:description
+                       "Business logic function with data flow",
+                       :required-props
+                       [:context :response :deps :impl],
+                       :tiers [:tier/service :tier/api]},
+                      :endpoint
+                      {:description
+                       "HTTP API endpoint (must also be function)",
+                       :required-props
+                       [:context :response :deps :impl],
+                       :implies [:semantic-namespace/function]},
+                      :data-schema
+                      {:description "Data structure definition",
+                       :required-props [:fields]},
+                      :error-handler
+                      {:description "Error handling strategy",
+                       :required-props [:impl]}},
+ :aspect-categories
+ {:tier
+  {:description "Architectural layer",
+   :values [:tier/foundation :tier/service :tier/api],
+   :ordering [:tier/foundation :tier/service :tier/api]},
+  :capacity
+  {:description "Resource limits", :values [:capacity/rate-limited]},
+  :protocol
+  {:description "Communication protocol",
+   :values [:protocol/http :protocol/oauth]},
+  :authorization
+  {:description "Access control",
+   :values [:authorization/required :authorization/unauthorized]},
+  :operation
+  {:description "Function operation type",
+   :values [:operation/search :operation/validate :operation/process]},
+  :integration
+  {:description "Integration boundary",
+   :values [:integration/internal :integration/external]},
+  :effect
+  {:description "Side effect profile",
+   :values [:effect/pure :effect/read]},
+  :domain
+  {:description "Business domain",
+   :values
+   [:domain/users
+    :domain/scheduling
+    :domain/google
+    :domain/calendar
+    :domain/api]},
+  :compliance
+  {:description "Regulatory requirements",
+   :values [:compliance/pii :compliance/audited]},
+  :temporal
+  {:description "Timing characteristics",
+   :values
+   [:temporal/async :temporal/timeout :temporal/timeout-configured]},
+  :observability
+  {:description "Monitoring concerns",
+   :values
+   [:observability/logged
+    :observability/metered
+    :observability/traced]}},
+ :axioms
+ [{:id :external-must-be-async,
+   :applies-to :integration/external,
+   :rule "External integrations must be :temporal/async"}
+  {:id :endpoint-is-function,
+   :applies-to :semantic-namespace/endpoint,
+   :rule "Endpoints must also have :semantic-namespace/function"}
+  {:id :async-needs-timeout,
+   :applies-to :temporal/async,
+   :rule "Async operations should have :temporal/timeout-configured"}
+  {:id :pii-needs-audit,
+   :applies-to :compliance/pii,
+   :rule "PII access must include :compliance/audited"}]}
