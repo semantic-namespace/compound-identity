@@ -1,84 +1,36 @@
 {:meta
- {:version "0.1.0",
+ {:version "0.2.0",
   :system "calendar-availability",
-  :description "Semantic ontology for calendar availability system"},
+  :description "Minimal semantic ontology for solo dev"},
  :entity-types
  #:semantic-namespace{:component
-                      {:description
-                       "Infrastructure component with lifecycle",
-                       :required-props [:deps :impl],
-                       :tiers [:tier/foundation :tier/service]},
+                      {:description "Infrastructure component",
+                       :tiers [:tier/foundation]},
                       :function
-                      {:description
-                       "Business logic function with data flow",
-                       :required-props
-                       [:context :response :deps :impl],
+                      {:description "Business logic function",
+                       :required-props [:context :response :deps],
                        :tiers [:tier/service :tier/api]},
                       :endpoint
                       {:description
-                       "HTTP API endpoint (must also be function)",
-                       :required-props
-                       [:context :response :deps :impl],
+                       "API endpoint (must also be function)",
                        :implies [:semantic-namespace/function]},
                       :data-schema
                       {:description "Data structure definition",
-                       :required-props [:fields]},
-                      :error-handler
-                      {:description "Error handling strategy",
-                       :required-props [:impl]}},
+                       :required-props [:fields]}},
  :aspect-categories
  {:tier
   {:description "Architectural layer",
-   :values [:tier/foundation :tier/service :tier/api],
-   :ordering [:tier/foundation :tier/service :tier/api]},
-  :capacity
-  {:description "Resource limits", :values [:capacity/rate-limited]},
-  :protocol
-  {:description "Communication protocol",
-   :values [:protocol/http :protocol/oauth]},
-  :authorization
-  {:description "Access control",
-   :values [:authorization/required :authorization/unauthorized]},
-  :operation
-  {:description "Function operation type",
-   :values [:operation/search :operation/validate :operation/process]},
-  :integration
-  {:description "Integration boundary",
-   :values [:integration/internal :integration/external]},
-  :effect
-  {:description "Side effect profile",
-   :values [:effect/pure :effect/read]},
+   :values [:tier/foundation :tier/service :tier/api]},
   :domain
   {:description "Business domain",
-   :values
-   [:domain/users
-    :domain/scheduling
-    :domain/google
-    :domain/calendar
-    :domain/api]},
-  :compliance
-  {:description "Regulatory requirements",
-   :values [:compliance/pii :compliance/audited]},
-  :temporal
-  {:description "Timing characteristics",
-   :values
-   [:temporal/async :temporal/timeout :temporal/timeout-configured]},
-  :observability
-  {:description "Monitoring concerns",
-   :values
-   [:observability/logged
-    :observability/metered
-    :observability/traced]}},
+   :values [:domain/users :domain/scheduling :domain/google]},
+  :effect {:description "Side effect profile", :values [:effect/pure]},
+  :integration
+  {:description "Integration boundary",
+   :values [:integration/external]},
+  :protocol
+  {:description "Communication protocol", :values [:protocol/oauth]}},
  :axioms
- [{:id :external-must-be-async,
-   :applies-to :integration/external,
-   :rule "External integrations must be :temporal/async"}
-  {:id :endpoint-is-function,
+ [{:id :endpoint-is-function,
    :applies-to :semantic-namespace/endpoint,
-   :rule "Endpoints must also have :semantic-namespace/function"}
-  {:id :async-needs-timeout,
-   :applies-to :temporal/async,
-   :rule "Async operations should have :temporal/timeout-configured"}
-  {:id :pii-needs-audit,
-   :applies-to :compliance/pii,
-   :rule "PII access must include :compliance/audited"}]}
+   :rule "Endpoints must also have :semantic-namespace/function"}]}
