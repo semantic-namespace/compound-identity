@@ -1,3 +1,5 @@
+*superseded by https://github.com/semantic-namespace/atlas*
+
 * semantic-namespace/compound-identity
 
 ** rationale
